@@ -13,7 +13,7 @@ use rsa::rand_core::RngCore;
 
 use crate::core::entity::WireGuardConfig;
 
-use crate::core::server::web::vo::req::{CreateWGData, CreateWgConfig, LoginData, RemoveClientReq};
+use crate::core::server::web::vo::req::{CreateWGData, CreateWgConfig, LoginData, RemoveClientReq, GroupPasswordReq, VerifyPasswordReq};
 use crate::core::server::web::vo::res::{
     ClientInfo, ClientStatusInfo, GroupList, NetworkInfo, WGData, WgConfig, CheckPasswordResult, 
 };
