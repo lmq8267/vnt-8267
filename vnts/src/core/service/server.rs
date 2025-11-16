@@ -349,6 +349,14 @@ impl ServerPacketHandler {
         let epoch = context.network_info.read().epoch;
         // 这里给客户端的是丢失精度的，可能导致客户端无法感知变更
         pong_packet.set_epoch(epoch as u16);
+        // 设置正确的源地址和目标地址  
+        let destination = net_packet.destination(); // 客户端请求的网关 (10.36.2.1)  
+        let source = net_packet.source();           // 客户端 IP (10.36.2.3)  
+        packet.set_source(destination);             // Pong 包的源地址应该是客户端的网关  
+        packet.set_destination(source);             // Pong 包的目标地址是客户端  
+        packet.set_default_version();  
+        packet.first_set_ttl(MAX_TTL);  
+        packet.set_gateway_flag(true);
         Ok(Some(packet))
     }
     fn control_addr_request(&self, addr: SocketAddr) -> Result<Option<NetPacket<Vec<u8>>>> {
