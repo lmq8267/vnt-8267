@@ -431,7 +431,11 @@ impl ServerPacketHandler {
         };
         let register_response = generate_ip(&self.cache, register_client_request).await?;
         let virtual_ip = register_response.virtual_ip.into();
-        response.virtual_gateway = gateway.into();
+        // 计算客户端所在网段的网关 IP（x.x.x.1）  
+        let virtual_ip_u32: u32 = virtual_ip;  
+        let client_gateway = (virtual_ip_u32 & 0xFFFFFF00) | 1; // 保留前三个字节，最后一个字节设为 1
+        
+        response.virtual_gateway = client_gateway; // 使用客户端网段的 .1 作为网关
         response.virtual_netmask = netmask.into();
         response.virtual_ip = virtual_ip;
         response.epoch = register_response.epoch as u32;
@@ -714,6 +718,11 @@ pub async fn generate_ip(
         if gateway == virtual_ip {
             Err(Error::InvalidIp)?
         }
+        // 禁止使用 x.x.x.1 地址（保留给服务端作为网关）  
+        let last_octet = virtual_ip & 0xFF;  
+        if last_octet == 1 {  
+            Err(Error::InvalidIp)?  
+        } 
         //指定了ip
         if let Some(info) = lock.clients.get_mut(&virtual_ip) {
             if info.device_id != device_id {
