@@ -705,11 +705,13 @@ pub async fn generate_ip(
 ) -> anyhow::Result<RegisterClientResponse> {
     let gateway: u32 = register_request.gateway.into();
     let netmask: u32 = register_request.netmask.into();
-    let network: u32 = gateway & netmask;
     let mut virtual_ip: u32 = register_request.virtual_ip.into();
     let device_id = register_request.device_id;
     let allow_ip_change = register_request.allow_ip_change;
     let group_id = register_request.group_id;
+    // 使用客户端请求的网段信息,而不是服务端配置  
+    let network: u32 = virtual_ip & netmask; 
+    
     let v = cache
         .virtual_network
         .optionally_get_with(group_id, || {
@@ -722,7 +724,8 @@ pub async fn generate_ip(
         })
         .await;
     // 可分配的ip段
-    let ip_range = network + 1..gateway | (!netmask);
+    let broadcast = network | (!netmask);  
+    let ip_range = network + 2..broadcast; // 跳过 .0 和 .1
     let timestamp = Local::now().timestamp();
     let mut lock = v.write();
     let mut insert = true;
