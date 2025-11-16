@@ -302,59 +302,56 @@ impl ServerPacketHandler {
         tcp_sender: &Option<Sender<Vec<u8>>>,
         server_secret: bool,
     ) -> result::Result<Result<Option<NetPacket<Vec<u8>>>>, NetPacket<B>> {
-        // 检查是否是发送到客户端网段网关的心跳包  
-        if net_packet.protocol() == Protocol::Control {  
-            if let control_packet::Protocol::Ping =   
-                protocol::control_packet::Protocol::from(net_packet.transport_protocol())  
-            {  
-                let destination = net_packet.destination();  
-                let source = net_packet.source();  
-                let dest_u32: u32 = destination.into();  
-                let source_u32: u32 = source.into();  
-              if source_subnet == dest_subnet {  
-    println!("检测到客户端网段网关心跳包: 源={}, 目标={}", source, destination);  
-    // 响应 Pong 包  
-    let client_gateway = (source_u32 & 0xFFFFFF00) | 1;  
-    println!("准备响应 Pong: 网关={}", Ipv4Addr::from(client_gateway));  
-    // ...  
-}
-                // 检查是否为客户端网段的 .1 地址  
-                if (dest_u32 & 0xFF) == 1 {  
-                    let source_subnet = source_u32 & 0xFFFFFF00;  
-                    let dest_subnet = dest_u32 & 0xFFFFFF00;  
+       // 检查是否是发送到客户端网段网关的心跳包    
+    if net_packet.protocol() == Protocol::Control {    
+        if let control_packet::Protocol::Ping =     
+            protocol::control_packet::Protocol::from(net_packet.transport_protocol())    
+        {    
+            let destination = net_packet.destination();    
+            let source = net_packet.source();    
+            let dest_u32: u32 = destination.into();    
+            let source_u32: u32 = source.into();    
+              
+            // 检查是否为客户端网段的 .1 地址  
+            if (dest_u32 & 0xFF) == 1 {  
+                // 计算网段 (添加这两行)  
+                let source_subnet = source_u32 & 0xFFFFFF00;  
+                let dest_subnet = dest_u32 & 0xFFFFFF00;  
                   
-                    if source_subnet == dest_subnet {  
-                        // 响应 Pong 包  
-                        let client_gateway = (source_u32 & 0xFFFFFF00) | 1;  
+                if source_subnet == dest_subnet {    
+                    println!("检测到客户端网段网关心跳包: 源={}, 目标={}", source, destination);    
+                    // 响应 Pong 包    
+                    let client_gateway = (source_u32 & 0xFFFFFF00) | 1;    
+                    println!("准备响应 Pong: 网关={}", Ipv4Addr::from(client_gateway));  
                       
-                        // 使用 match 或 map_err 来处理错误,而不是 ?  
-                        let vec = vec![0u8; 12 + 4 + ENCRYPTION_RESERVED];  
-                        let mut packet = match NetPacket::new_encrypt(vec) {  
-                            Ok(p) => p,  
-                            Err(e) => return Ok(Err(e.into())),  
-                        };  
-                        packet.set_protocol(Protocol::Control);  
-                        packet.set_transport_protocol(control_packet::Protocol::Pong.into());  
-                        if let Err(e) = packet.set_payload(net_packet.payload()) {  
-                            return Ok(Err(e.into()));  
-                        }  
-                        let mut pong_packet = match control_packet::PongPacket::new(packet.payload_mut()) {  
-                            Ok(p) => p,  
-                            Err(e) => return Ok(Err(e.into())),  
-                        };  
-                        pong_packet.set_epoch(0);  
-                      
-                        packet.set_source(client_gateway.into());  
-                        packet.set_destination(source);  
-                        packet.set_default_version();  
-                        packet.first_set_ttl(MAX_TTL);  
-                        packet.set_gateway_flag(true);  
-                      
-                        return Ok(Ok(Some(packet)));  
+                    // 创建 Pong 响应包  
+                    let vec = vec![0u8; 12 + 4 + ENCRYPTION_RESERVED];  
+                    let mut packet = match NetPacket::new_encrypt(vec) {  
+                        Ok(p) => p,  
+                        Err(e) => return Ok(Err(e.into())),  
+                    };  
+                    packet.set_protocol(Protocol::Control);  
+                    packet.set_transport_protocol(control_packet::Protocol::Pong.into());  
+                    if let Err(e) = packet.set_payload(net_packet.payload()) {  
+                        return Ok(Err(e.into()));  
                     }  
+                    let mut pong_packet = match control_packet::PongPacket::new(packet.payload_mut()) {  
+                        Ok(p) => p,  
+                        Err(e) => return Ok(Err(e.into())),  
+                    };  
+                    pong_packet.set_epoch(0);  
+                      
+                    packet.set_source(client_gateway.into());  
+                    packet.set_destination(source);  
+                    packet.set_default_version();  
+                    packet.first_set_ttl(MAX_TTL);  
+                    packet.set_gateway_flag(true);  
+                      
+                    return Ok(Ok(Some(packet)));  
                 }  
             }  
-        }
+        }  
+    }  
         if net_packet.protocol() == Protocol::Service {
             if let service_packet::Protocol::RegistrationRequest =
                 protocol::service_packet::Protocol::from(net_packet.transport_protocol())
