@@ -232,32 +232,8 @@
             }  
         });  
       
-        $('#select_input').on('focus', function () {  
-            $('#search_select').show();  
-            newOptions(tempArr);  
-        });  
-      
-        $('#select_input').on('blur', function () {  
-            if ($('#search_select').hasClass('ul-hover')) {  
-                $('#search_select').show();  
-            } else {  
-                $('#search_select').hide();  
-            }  
-        });  
-      
-        $('#select_ul').delegate('.li-select', 'click', function () {  
-            $('#select_ul .li-select').removeClass('li-hover');  
-            var selectText = $(this).html();  
-            var groupIdVal = $($(this)[0]).attr("data-groupId");  
-            $('#select_input').val(selectText);  
-            $('#search_select').hide();  
-            $("input[name='groupId']").val(groupIdVal);  
-            /* 不直接显示,先尝试验证密码 */
-            checkGroupPassword(groupIdVal);  
-        });  
-      
-        /* 删除自动选择第一个组网的逻辑 */
-        $('.group_len').html('(' + tempArr.length + ')')  
+        $('#search_select').hide();  
+        $('.group_len').html(''); 
     }
 
     /* 检查组网是否需要密码 */
@@ -587,17 +563,19 @@ PersistentKeepalive = ${persistentKeepalive}`;
                 $('.network_ip').html(data.network_ip);
                 nodeInitFunc(data.gateway_ip, data.clients);
                 displayDeviceInfo(group, data);
+                sessionStorage.setItem('currentGroupId', group); 
             } else {
                 window.alert("调用服务失败")
             }
 
         })
     }
-    postGroupList({}, function (result) {
-        let group_list = result.data.group_list;
-        // console.log(group_list);
-        searchInput(group_list);
-    });
+    searchInput([]);
+    const savedGroupId = sessionStorage.getItem('currentGroupId');  
+    if (savedGroupId) {  
+        $('#select_input').val(savedGroupId);  
+        checkGroupPassword(savedGroupId);  
+    }
     $('.close').on('click', function () {
         $('#wgConfigModal').hide();
         $('#addModal').hide();
