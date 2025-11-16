@@ -12,8 +12,6 @@ use crate::cipher::Aes256GcmCipher;
 use crate::core::entity::{NetworkInfo, WireGuardConfig};
 use crate::core::store::expire_map::ExpireMap;
 
-pub use cache::load_or_generate_server_wg_keys;
-
 // 获取 vnts_wg 目录  
 fn get_wg_dir() -> PathBuf {  
     let program_dir = if let Ok(exe_path) = std::env::current_exe() {  
