@@ -71,6 +71,16 @@ impl VntContext {
     }
 }
 
+// 获取程序所在目录  
+fn get_program_dir() -> PathBuf {  
+    if let Ok(exe_path) = std::env::current_exe() {  
+        if let Some(dir) = exe_path.parent() {  
+            return dir.to_path_buf();  
+        }  
+    }  
+    PathBuf::from(".")  
+}
+
 impl AppCache {
     pub fn new() -> Self {
         let wg_group_map: Arc<DashMap<[u8; 32], WireGuardConfig>> = Default::default();
@@ -116,33 +126,35 @@ impl AppCache {
         }
     }
     // 加载WireGuard配置  
-    pub fn load_wg_configs(&self, config_path: &PathBuf) -> anyhow::Result<()> {  
+    pub fn load_wg_configs(&self) -> anyhow::Result<()> {  
+        let config_path = get_program_dir().join("wg_configs.json");  
         if !config_path.exists() {  
             log::info!("WireGuard配置文件不存在: {:?}", config_path);  
             return Ok(());  
         }  
-        let content = fs::read_to_string(config_path)?;  
+        let content = fs::read_to_string(&config_path)?;  
         let store: WireGuardConfigStore = serde_json::from_str(&content)?;  
           
         for config in store.configs {  
             self.wg_group_map.insert(config.public_key, config);  
         }  
-        log::info!("成功加载 {} 个WireGuard配置", self.wg_group_map.len());  
+        log::info!("成功加载 {} 个WireGuard配置从 {:?}", self.wg_group_map.len(), config_path);  
         Ok(())  
     }  
       
     // 保存WireGuard配置  
-    pub fn save_wg_configs(&self, config_path: &PathBuf) -> anyhow::Result<()> {  
+    pub fn save_wg_configs(&self) -> anyhow::Result<()> {  
+        let config_path = get_program_dir().join("wg_configs.json");  
         let configs: Vec<WireGuardConfig> = self.wg_group_map  
             .iter()  
             .map(|entry| entry.value().clone())  
             .collect();  
           
-        let count = configs.len(); 
+        let count = configs.len();  
         let store = WireGuardConfigStore { configs };  
         let content = serde_json::to_string_pretty(&store)?;  
-        fs::write(config_path, content)?;  
-        log::info!("成功保存 {} 个WireGuard配置到 {:?}", count, config_path); 
+        fs::write(&config_path, content)?;  
+        log::info!("成功保存 {} 个WireGuard配置到 {:?}", count, config_path);  
         Ok(())  
     }  
 }
