@@ -147,7 +147,7 @@ impl AppCache {
         }
     }
     // 加载WireGuard客户端配置  
-    pub fn load_wg_configs(&self) -> anyhow::Result<()> {  
+    pub fn load_wg_configs(&self, gateway: Ipv4Addr, netmask: Ipv4Addr) -> anyhow::Result<()> {  
         let config_path = get_wg_dir().join("client_configs.json");  
         if !config_path.exists() {  
             log::info!("WireGuard配置文件不存在: {:?}", config_path);  
@@ -155,10 +155,48 @@ impl AppCache {
         }  
         let content = fs::read_to_string(&config_path)?;  
         let store: WireGuardConfigStore = serde_json::from_str(&content)?;  
-          
+      
         for config in store.configs {  
+            // 确保对应的网络信息存在  
+            if !self.virtual_network.contains_key(&config.group_id) {  
+                let network = Ipv4Network::with_netmask(gateway, netmask)?;  
+                let network_info = Arc::new(RwLock::new(NetworkInfo::new(  
+                    u32::from(network.network()),  
+                    u32::from(netmask),  
+                    u32::from(gateway),  
+                )));  
+                self.virtual_network.insert(  
+                    config.group_id.clone(),   
+                    network_info,   
+                    Duration::from_secs(7 * 24 * 3600)  
+                ).await;  
+            }  
+          
+            // 将客户端信息添加到网络中  
+            if let Some(network_info) = self.virtual_network.get(&config.group_id) {  
+                let mut guard = network_info.write();  
+                guard.clients.entry(config.ip.into()).or_insert_with(|| ClientInfo {  
+                    virtual_ip: config.ip.into(),  
+                    device_id: config.device_id.clone(),  
+                    name: config.device_id.clone(),  
+                    version: String::from("wg"),  
+                    wireguard: Some(config.public_key),  
+                    online: false,  
+                    address: SocketAddr::from(([0, 0, 0, 0], 0)),  
+                    client_secret: true,  
+                    client_secret_hash: vec![],  
+                    server_secret: true,  
+                    tcp_sender: None,  
+                    wg_sender: None,  
+                    client_status: None,  
+                    last_join_time: chrono::Local::now(),  
+                    timestamp: chrono::Local::now().timestamp(),  
+                });  
+            }  
+          
             self.wg_group_map.insert(config.public_key, config);  
         }  
+      
         log::info!("成功加载 {} 个WireGuard配置从 {:?}", self.wg_group_map.len(), config_path);  
         Ok(())  
     }   
