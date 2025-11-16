@@ -13,7 +13,7 @@
     <style>
 
         .select-content:before {
-            content: "组网标识";
+            content: "组网token";
             position: absolute;
             left: -76px;
             line-height: 48px;
@@ -103,7 +103,7 @@
         </div>
         <span class="group_len"></span>
     </div>
-    <button id="addWireGuard">接入WireGuard客户端</button>
+    <button id="addWireGuard">新建WireGuard客户端</button>
 </div>
 <div id="container_content">
     <div id="group_info">
@@ -154,8 +154,8 @@
         <span class="close">&times;</span>
         <h2>WireGuard配置</h2>
         <div class="form-group">
-            <label for="groupId">组网编号</label>
-            <input type="text" id="groupId" placeholder="组网编号">
+            <label for="groupId">组网token</label>
+            <input type="text" id="groupId" placeholder="组网token">
         </div>
         <div class="form-group">
             <label for="virtualIP">虚拟IP</label>
@@ -171,7 +171,7 @@
         </div>
         <div class="form-group">
             <label for="endpoint">Endpoint</label>
-            <input type="text" id="endpoint" placeholder="服务器UDP链接地址">
+            <input type="text" id="endpoint" placeholder="服务器的UDP链接地址">
         </div>
         <div class="form-group">
             <label for="persistentKeepalive">PersistentKeepalive</label>
@@ -216,51 +216,70 @@
             $('#select_ul').html('').append(options);
         }
     }
-
-    function searchInput(tempArr) {
-        $('#select_input').on('keyup', function () {
-            newOptions(tempArr);
-        });
-        $('#select_input').on('focus', function () {
-            $('#search_select').show();
-            newOptions(tempArr);
-        });
-        $('#select_ul .li-disabled').on('click', function () {
-            $('#search_select').show();
-        });
-        $('#search_select').on('mouseover', function () {
-            $(this).addClass('ul-hover');
-        });
-        $('#search_select').on('mouseout', function () {
-            $(this).removeClass('ul-hover');
-        });
-        $('#select_input').on('blur', function () {
-            if ($('#search_select').hasClass('ul-hover')) {
-                $('#search_select').show();
-            } else {
-                $('#search_select').hide();
-            }
-        });
-        $('#select_ul').delegate('.li-select', 'click', function () {
-            $('#select_ul .li-select').removeClass('li-hover');
-            var selectText = $(this).html();
-            var groupIdVal = $($(this)[0]).attr("data-groupId");
-            $('#select_input').val(selectText);
-            $('#search_select').hide();
-            $("input[name='groupId']").val(groupIdVal);
-            getGroupInfoFunc(groupIdVal)
-
-        });
-        $('#select_ul').delegate('.li-select', 'mouseover', function () {
-            $('#select_ul .li-select').removeClass('li-hover');
-            $(this).addClass('li-hover');
-        });
-        if (tempArr.length > 0) {
-            $('#select_input').val(tempArr[0])
-            getGroupInfoFunc(tempArr[0])
-        }
-        $('.group_len').html('(' + tempArr.length + ')')
+    /* 存储待验证的组网ID */
+    let pendingGroupId = null;
+    function searchInput(tempArr) {  
+        $('#select_input').on('keypress', function (e) {  
+            if (e.which === 13) { 
+                var inputVal = $(this).val().trim();  
+                if (tempArr.includes(inputVal)) {  
+                    $("input[name='groupId']").val(inputVal);  
+                    /* 不直接显示,先尝试验证密码 */
+                    checkGroupPassword(inputVal);  
+                } else {  
+                    alert('组网token不存在');  
+                }  
+            }  
+        });  
+      
+        $('#select_input').on('focus', function () {  
+            $('#search_select').show();  
+            newOptions(tempArr);  
+        });  
+      
+        $('#select_input').on('blur', function () {  
+            if ($('#search_select').hasClass('ul-hover')) {  
+                $('#search_select').show();  
+            } else {  
+                $('#search_select').hide();  
+            }  
+        });  
+      
+        $('#select_ul').delegate('.li-select', 'click', function () {  
+            $('#select_ul .li-select').removeClass('li-hover');  
+            var selectText = $(this).html();  
+            var groupIdVal = $($(this)[0]).attr("data-groupId");  
+            $('#select_input').val(selectText);  
+            $('#search_select').hide();  
+            $("input[name='groupId']").val(groupIdVal);  
+            /* 不直接显示,先尝试验证密码 */
+            checkGroupPassword(groupIdVal);  
+        });  
+      
+        /* 删除自动选择第一个组网的逻辑 */
+        $('.group_len').html('(' + tempArr.length + ')')  
     }
+
+    /* 检查组网是否需要密码 */
+    function checkGroupPassword(groupId) {  
+        /* 调用后端API检查是否需要密码 */ 
+        postCheckGroupPassword({'group': groupId}, function (response) {  
+            if (response && response.code === 200) {  
+                if (response.data.require_password) {  
+                    /* 需要密码,显示密码输入框 */
+                    pendingGroupId = groupId;  
+                    $('#groupPassword').val('');  
+                    $('#passwordError').text('');  
+                    $('#passwordModal').show();  
+                } else {  
+                    /* 不需要密码,直接显示 */
+                    getGroupInfoFunc(groupId);  
+                }  
+            } else {  
+                alert('查找组网失败');  
+            }  
+        });  
+    }  
 
     function displayDeviceInfo(groupId, data) {
         let devices = data.clients;
@@ -363,6 +382,35 @@ PersistentKeepalive = ${persistentKeepalive}`;
     }
 </script>
 <script>
+    /* 密码确认按钮点击事件 */
+    $('#confirmPasswordButton').on('click', function () {  
+        const password = $('#groupPassword').val().trim();  
+        if (!password) {  
+            $('#passwordError').text('密码不能为空');  
+            return;  
+        }  
+      
+        /* 验证密码 */
+        postVerifyGroupPassword({  
+            'group': pendingGroupId,  
+            'password': password  
+        }, function (response) {  
+            if (response && response.code === 200) {  
+                $('#passwordModal').hide();  
+                getGroupInfoFunc(pendingGroupId);  
+            } else {  
+                $('#passwordError').text('密码错误');  
+            }  
+        });  
+    });  
+  
+    /* 关闭密码模态窗口 */
+    $('.close').on('click', function () {  
+        $('#wgConfigModal').hide();  
+        $('#addModal').hide();  
+        $('#passwordModal').hide();  
+    });
+    
     let groupId;
     let deviceId = 'wg' + new Date().getTime();
     $('#addWireGuard').on('click', function () {
