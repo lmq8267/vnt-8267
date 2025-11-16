@@ -148,6 +148,7 @@ jobs:
         if: ${{ matrix.TARGET != 'x86_64-unknown-freebsd' }}
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
+          cd vnts
           cargo build --release --target ${{ matrix.target }} --features ${{ matrix.FEATURES }}
         
       - name: 编译FreeBSD
@@ -155,6 +156,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-user qemu-user-static binfmt-support build-essential
+          cd vnts
           cargo install cross --git https://github.com/cross-rs/cross
           sed -i 's/const CLOCK_ID: ClockId = ClockId::CLOCK_BOOTTIME;/const CLOCK_ID: ClockId = ClockId::CLOCK_MONOTONIC;/g' ./lib/boringtun/src/sleepyinstant/unix.rs
           cross build --target ${{ matrix.target }} --release --features $FEATURES
@@ -167,13 +169,13 @@ jobs:
           install-only: true
           
       - name: 打包压缩
-        run: upx --lzma --best target/${{ matrix.target }}/release/vnts || true
+        run: upx --lzma --best vnts/target/${{ matrix.target }}/release/vnts || true
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
          name: vnts-${{ matrix.target }}
-         path: target/${{ matrix.target }}/release/vnts
+         path: vnts/target/${{ matrix.target }}/release/vnts
         
       - 
        name: 删除工作流
