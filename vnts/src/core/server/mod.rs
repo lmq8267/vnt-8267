@@ -26,9 +26,8 @@ pub async fn start(
 ) -> io::Result<()> {
     let udp = Arc::new(UdpSocket::from_std(udp)?);
     let cache = AppCache::new();
-    // 加载WireGuard配置  
-    let wg_config_path = PathBuf::from("wg_configs.json");  
-    if let Err(e) = cache.load_wg_configs(&wg_config_path) {  
+    // 加载WireGuard配置 - 不再需要传递路径  
+    if let Err(e) = cache.load_wg_configs() {  
         log::warn!("加载WireGuard配置失败: {:?}", e);  
     }
     let handler = PacketHandler::new(
