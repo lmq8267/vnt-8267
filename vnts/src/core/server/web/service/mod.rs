@@ -115,6 +115,28 @@ impl VntsWebService {
         } else {
             Ipv4Addr::from_str(&wg_data.virtual_ip).context("虚拟IP错误")?
         };
+        // 检查IP是否已被使用  
+        if virtual_ip != Ipv4Addr::UNSPECIFIED {  
+            // 检查是否被WireGuard客户端使用  
+            let ip_used_by_wg = self.cache.wg_group_map  
+                .iter()  
+                .any(|entry| {  
+                    let config = entry.value();  
+                    config.group_id == group_id && config.ip == virtual_ip  
+                });  
+          
+            if ip_used_by_wg {  
+                Err(anyhow!("该IP已被WireGuard客户端使用"))?;  
+            }  
+          
+            // 检查是否被普通客户端使用  
+            if let Some(network_info) = self.cache.virtual_network.get(&group_id) {  
+                let guard = network_info.read();  
+                if guard.clients.contains_key(&virtual_ip.into()) {  
+                    Err(anyhow!("该IP已被其他客户端使用"))?;  
+                }  
+            }  
+        }
         let register_client_request = RegisterClientRequest {
             group_id: group_id.clone(),
             virtual_ip,
