@@ -374,50 +374,49 @@ impl WireGuard {
     ) -> anyhow::Result<()> {
         // 网关 ping 处理  
         if dest_ip == self.gateway_ip {  
-            if let Some(ipv4_packet) = IpV4Packet::new(data) {  
-                if ipv4_packet.protocol() == ipv4::protocol::Protocol::Icmp {  
-                    if let Some(icmp_packet) = icmp(&ipv4_packet.payload()) {  
-                        if icmp_packet.kind() == Kind::EchoRequest {  
-                            self.reply_ping(src_ip, dest_ip, icmp_packet, dst_buf)  
-                                .await?;  
-                            return Ok(());  
-                        }  
-                    }  
+            if self.ping(data, src_ip, dest_ip).is_ok() {  
+                if let Err(e) = self.handle_ipv4_data(&data, dst_buf).await {  
+                    log::warn!("发送ping回应到wg失败,{:?}", e)  
                 }  
             }  
+            return Ok(());  
         }
         // 广播处理  
         if dest_ip.is_broadcast() || dest_ip == self.broadcast_ip {  
-            let guard = self.network_info.read();  
-            for (ip, info) in guard.clients.iter() {  
-                let dest_ip: Ipv4Addr = (*ip).into();  
-                if dest_ip == src_ip {  
-                    continue;  
-                }  
-                if !info.online {  
-                    continue;  
-                }  
-                let server_secret = info.server_secret;  
-                let peer_addr = info.address;  
-                let peer_tcp_sender = info.tcp_sender.clone();  
-                let peer_wg_sender = info.wg_sender.clone();  
-                drop(guard);  
+            let x: Vec<_> = self  
+                .network_info  
+                .read()  
+                .clients  
+                .values()  
+                .filter(|v| v.online && v.virtual_ip != u32::from(self.ip))  
+                .map(|v| {  
+                    (  
+                        v.address,  
+                        v.tcp_sender.clone(),  
+                        v.server_secret,  
+                        v.wg_sender.clone(),  
+                    )  
+                })  
+                .collect();  
+            for (peer_addr, peer_tcp_sender, server_secret, peer_wg_sender) in x {  
                 if let Err(e) = self  
                     .send_one(  
-                        server_secret,  
                         peer_addr,  
                         peer_tcp_sender,  
                         peer_wg_sender,  
+                        server_secret,  
+                        src_ip,  
+                        dest_ip,  
                         data,  
                         dst_buf,  
                     )  
                     .await  
                 {  
-                    log::warn!("{:?}", e);  
+                    log::warn!("wg广播失败 {} {} {:?}", src_ip, peer_addr, e);  
                 }  
             }  
             return Ok(());  
-        }  
+        } 
 
         // 点对点转发 - 路由查找逻辑  
         let mut target_ip = dest_ip;  
@@ -451,6 +450,9 @@ impl WireGuard {
                 if !dest_client_info.online {  
                     Err(anyhow!("目标不在线"))?  
                 }  
+                if dest_client_info.virtual_ip == u32::from(self.ip) {  
+                    Err(anyhow!("阻止回路"))?  
+                }  
                 let server_secret = dest_client_info.server_secret;  
                 let peer_addr = dest_client_info.address;  
                 let peer_tcp_sender = dest_client_info.tcp_sender.clone();  
@@ -462,10 +464,12 @@ impl WireGuard {
         };
 
         self.send_one(  
-            server_secret,  
             peer_addr,  
             peer_tcp_sender,  
             peer_wg_sender,  
+            server_secret,  
+            src_ip,  
+            dest_ip,  
             data,  
             dst_buf,  
         )  
