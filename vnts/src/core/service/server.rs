@@ -701,7 +701,7 @@ pub async fn generate_ip(
     }
     // 使用组网实际的网段计算 IP 分配范围  
     let actual_network = lock.network_ip;  
-    let ip_range = actual_network + 1..gateway | (!netmask); 
+    let ip_range = actual_network + 1..(actual_network | !netmask);
     let mut insert = true;
     if virtual_ip != 0 {
         if gateway == virtual_ip {
