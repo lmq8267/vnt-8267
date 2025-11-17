@@ -399,7 +399,7 @@ impl WireGuard {
                     )  
                 })  
                 .collect();  
-            for (peer_addr, peer_tcp_sender, server_secret, peer_wg_sender) in x {  
+            for (target_virtual_ip, peer_addr, peer_tcp_sender, server_secret, peer_wg_sender) in x {  
                 if let Err(e) = self  
                     .send_one(  
                         peer_addr,  
