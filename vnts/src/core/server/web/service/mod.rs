@@ -140,6 +140,22 @@ impl VntsWebService {
         // 解析和验证路由配置  
         let mut routes = Vec::new();  
         let mut allowed_ips = vec![network.to_string()];  
+        // 检查组网是否已存在，如果存在且网段与服务端默认不同，则添加实际网段  
+        if let Some(network_info) = cache.virtual_network.get(&group_id) {  
+            let guard = network_info.read();  
+            let actual_network_ip = Ipv4Addr::from(guard.network_ip);  
+            let actual_mask_ip = Ipv4Addr::from(guard.mask_ip);  
+      
+            // 计算实际网段的 CIDR 表示  
+            if let Ok(actual_network) = Ipv4Network::with_netmask(actual_network_ip, actual_mask_ip) {  
+                let actual_network_str = actual_network.to_string();  
+          
+                // 如果实际网段与服务端默认网段不同，添加到 AllowedIPs  
+                if actual_network_str != network.to_string() {  
+                    allowed_ips.push(actual_network_str);  
+                }  
+            }  
+        }  
       
         if let Some(route_configs) = &wg_data.routes {  
             for route_req in route_configs {  
